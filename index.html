@@ -1,1 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Color Match & Film Look</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial;
+      margin: 0;
+      padding: 0;
+      background: #f9f9f9;
+      color: #111;
+    }
+    header {
+      padding: 1rem;
+      background: #fff;
+      font-size: 1.5rem;
+      font-weight: bold;
+      text-align: center;
+      border-bottom: 1px solid #ddd;
+    }
+    .container {
+      padding: 1rem;
+      display: grid;
+      gap: 1rem;
+    }
+    .card {
+      background: #fff;
+      border-radius: 1rem;
+      padding: 1rem;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+    label {
+      font-weight: 600;
+    }
+    input[type="file"] {
+      margin-top: 0.5rem;
+    }
+    select, input[type="range"] {
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+    canvas {
+      max-width: 100%;
+      border-radius: 0.5rem;
+    }
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <header>Color Match & Film Look Helper</header>
+  <div class="container">
+    <div class="card">
+      <label>Upload Reference Image</label>
+      <input type="file" accept="image/*" id="refImage">
+    </div>
+    <div class="card">
+      <label>Upload Target Image</label>
+      <input type="file" accept="image/*" id="targetImage">
+    </div>
+    <div class="card">
+      <label>Input Color Space</label>
+      <select id="inputColorSpace">
+        <option>ACEScct</option>
+        <option>ACEScc</option>
+        <option>ACEScg</option>
+        <option>Davinci Wide Gamut</option>
+        <option>sRGB</option>
+      </select>
+    </div>
+    <div class="card">
+      <label>Output Color Space</label>
+      <select id="outputColorSpace">
+        <option>ACEScct</option>
+        <option>ACEScc</option>
+        <option>ACEScg</option>
+        <option>Davinci Wide Gamut</option>
+        <option>sRGB</option>
+      </select>
+    </div>
+    <div class="card">
+      <label>Film Look</label>
+      <select id="filmLook">
+        <option value="none">None</option>
+        <option value="kodak250d">Kodak 250D</option>
+        <option value="kodak500t">Kodak 500T</option>
+        <option value="kodak2383">Kodak 2383 Print</option>
+        <option value="company3">Hollywood (Company 3)</option>
+        <option value="kpop">K-Pop MV</option>
+      </select>
+      <div class="slider-label">
+        <span>Color Strength</span><span id="colorStrengthVal">1.0</span>
+      </div>
+      <input type="range" min="0" max="2" step="0.01" value="1" id="colorStrength">
+      <div class="slider-label">
+        <span>Contrast Strength</span><span id="contrastStrengthVal">1.0</span>
+      </div>
+      <input type="range" min="0" max="2" step="0.01" value="1" id="contrastStrength">
+    </div>
+    <div class="card">
+      <canvas id="previewCanvas" width="640" height="360"></canvas>
+    </div>
+    <div class="card">
+      <button onclick="exportLUT()">Export LUT (.cube)</button>
+    </div>
+  </div>
+  <script>
+    const refImageInput = document.getElementById("refImage");
+    const targetImageInput = document.getElementById("targetImage");
+    const canvas = document.getElementById("previewCanvas");
+    const ctx = canvas.getContext("2d");
+    let refImage = null;
+    let targetImage = null;
+
+    function loadImage(file, callback) {
+      const img = new Image();
+      img.onload = () => callback(img);
+      img.src = URL.createObjectURL(file);
+    }
+
+    refImageInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        loadImage(file, (img) => {
+          refImage = img;
+          drawImages();
+        });
+      }
+    });
+
+    targetImageInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        loadImage(file, (img) => {
+          targetImage = img;
+          drawImages();
+        });
+      }
+    });
+
+    function drawImages() {
+      if (!targetImage) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(targetImage, 0, 0, canvas.width, canvas.height);
+      applyFilmLook();
+    }
+
+    function applyFilmLook() {
+      const look = document.getElementById("filmLook").value;
+      const colorStrength = parseFloat(document.getElementById("colorStrength").value);
+      const contrastStrength = parseFloat(document.getElementById("contrastStrength").value);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+        const isSkin = r > 95 && g > 40 && b > 20 && r > b && r - g > 15;
+        if (look === "kodak250d") {
+          r *= 1 + 0.05 * colorStrength;
+          g *= 1 + 0.02 * colorStrength;
+          b *= 1 - 0.03 * colorStrength;
+        }
+        if (look === "kodak500t") {
+          r *= 1.0 - 0.02 * colorStrength;
+          g *= 1.0 + 0.01 * colorStrength;
+          b *= 1.0 + 0.03 * colorStrength;
+        }
+        if (look === "kodak2383") {
+          const gain = 1.05 + 0.02 * colorStrength;
+          r = Math.pow(r / 255, 0.9) * 255 * gain;
+          g = Math.pow(g / 255, 0.9) * 255 * gain;
+          b = Math.pow(b / 255, 0.9) * 255 * gain;
+        }
+        if (look === "company3") {
+          r *= 1 - 0.04 * colorStrength;
+          g *= 1 + 0.02 * colorStrength;
+          b *= 1 + 0.04 * colorStrength;
+        }
+        if (look === "kpop") {
+          r *= 1 + 0.01 * colorStrength;
+          g *= 1 + 0.015 * colorStrength;
+          b *= 1 + 0.02 * colorStrength;
+          if (isSkin) {
+            r *= 1 + 0.04;
+            g *= 1 + 0.02;
+            b *= 1 - 0.01;
+          }
+        }
+        const applySigmoid = (val, strength) => {
+          const x = (val / 255 - 0.5) * 8 * strength;
+          return 255 / (1 + Math.exp(-x));
+        };
+        r = applySigmoid(r, contrastStrength);
+        g = applySigmoid(g, contrastStrength);
+        b = applySigmoid(b, contrastStrength);
+        data[i] = Math.min(255, Math.max(0, r));
+        data[i + 1] = Math.min(255, Math.max(0, g));
+        data[i + 2] = Math.min(255, Math.max(0, b));
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    document.getElementById("colorStrength").addEventListener("input", function (e) {
+      document.getElementById("colorStrengthVal").innerText = e.target.value;
+      drawImages();
+    });
+    document.getElementById("contrastStrength").addEventListener("input", function (e) {
+      document.getElementById("contrastStrengthVal").innerText = e.target.value;
+      drawImages();
+    });
+    document.getElementById("filmLook").addEventListener("change", drawImages);
+
+    function exportLUT() {
+  const size = 33;
+  let lut = `TITLE \"Generated LUT\"
+LUT_3D_SIZE ${size}
+DOMAIN_MIN 0.0 0.0 0.0
+DOMAIN_MAX 1.0 1.0 1.0
+`;
+  for (let b = 0; b < size; b++) {
+    for (let g = 0; g < size; g++) {
+      for (let r = 0; r < size; r++) {
+        let rf = r / (size - 1);
+        let gf = g / (size - 1);
+        let bf = b / (size - 1);
+        rf = Math.min(1, rf * 1.05);
+        gf = Math.min(1, gf * 1.02);
+        bf = Math.min(1, bf * 0.98);
+        lut += `${rf.toFixed(6)} ${gf.toFixed(6)} ${bf.toFixed(6)}
+`;
+      }
+    }
+  }
+  const blob = new Blob([lut], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = 'color_match_lut.cube';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
 
