@@ -1,141 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="apple-touch-icon" href="icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ACAAN">
   <meta charset="UTF-8" />
-  <title>Color Grading Helper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ACAAN Notes UI</title>
   <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: black;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
     body {
-      font-family: sans-serif;
-      padding: 20px;
-      max-width: 600px;
-      margin: auto;
+      background: url('https://i.imgur.com/qSouMXH.jpeg') no-repeat center center fixed;
+      background-size: cover;
+      position: relative;
     }
-    input, button {
-      margin: 10px 0;
-      padding: 8px 12px;
-      font-size: 1rem;
+    #datetime {
+      position: absolute;
+      top: 42px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 16px;
+      color: #888;
+      z-index: 2;
+      font-weight: 400;
+      text-align: center;
     }
-    canvas {
-      display: none;
+    #content {
+      position: absolute;
+      top: 80px;
+      left: 20px;
+      right: 20px;
+      bottom: 80px;
+      color: white;
+      font-size: 20px;
+      outline: none;
+      white-space: pre-wrap;
+      overflow-y: auto;
+      z-index: 1;
+      -webkit-overflow-scrolling: touch;
+      caret-color: #ffcc00;
     }
-    #color-preview {
-      width: 100px;
-      height: 100px;
-      border: 1px solid #ccc;
-      margin-top: 10px;
+    #content:focus {
+      color: white;
     }
     #result {
-      margin-top: 20px;
+      position: absolute;
+      top: 42px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      color: #ccc;
+      font-size: 16px;
+      display: none;
+      z-index: 3;
+      font-weight: 400;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-    #lutOutput {
-      white-space: pre-wrap;
-      background: #f4f4f4;
-      padding: 10px;
-      border-radius: 6px;
-      font-family: monospace;
+    #calculateBtn {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      width: 44px;
+      height: 44px;
+      z-index: 10;
+      background-color: transparent;
+      border: none;
     }
   </style>
 </head>
 <body>
-  <h1>Color Grading Helper for DaVinci Resolve</h1>
-
-  <input type="file" id="imageInput" accept="image/*">
-  <canvas id="canvas"></canvas>
-
-  <div id="result">
-    <p><strong>Average Color:</strong> <span id="avgColorText">-</span></p>
-    <div id="color-preview"></div>
-    <p><strong>Estimated Contrast:</strong> <span id="contrastText">-</span></p>
-    <button id="copyBtn">Copy RGB Values</button>
-    <button id="generateLUT">Generate LUT</button>
-    <h3>LUT Output (.cube format):</h3>
-    <div id="lutOutput">-</div>
-  </div>
+  <div id="datetime"></div>
+  <div id="content" contenteditable="true"></div>
+  <div id="result"></div>
+  <div id="calculateBtn"
+    onmousedown="toggleResult(true)" 
+    onmouseup="toggleResult(false)" 
+    ontouchstart="toggleResult(true)" 
+    ontouchend="toggleResult(false)"></div>
 
   <script>
-    const imageInput = document.getElementById('imageInput');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const avgColorText = document.getElementById('avgColorText');
-    const contrastText = document.getElementById('contrastText');
-    const colorPreview = document.getElementById('color-preview');
-    const copyBtn = document.getElementById('copyBtn');
-    const generateLUTBtn = document.getElementById('generateLUT');
-    const lutOutput = document.getElementById('lutOutput');
+    let deck = [
+      "QC", "2H", "QD", "QH", "2C", "5H", "AC", "AH", "9C", "6C",
+      "6H", "KH", "8H", "JD", "7C", "9H", "3S", "7D", "8C", "5D",
+      "KC", "3H", "10C", "AD", "AS", "3C", "JC", "4D", "JS", "4S",
+      "8D", "4H", "7S", "4C", "6S", "10D", "3D", "KS", "6D", "7H",
+      "9S", "9D", "10S", "5C", "KD", "10H", "5S", "8S", "JH", "2S",
+      "2D", "QS"
+    ];
 
-    let averageColor = { r: 0, g: 0, b: 0 };
+    let showingResult = false;
 
-    function calculateContrast(imageData) {
-      const data = imageData.data;
-      let total = 0;
-      let mean = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        const luminance = 0.2126 * data[i] + 0.7152 * data[i+1] + 0.0722 * data[i+2];
-        mean += luminance;
+    function toggleResult(show) {
+      const resultDiv = document.getElementById("result");
+      const datetime = document.getElementById("datetime");
+
+      if (show) {
+        runCalculation();
+      } else {
+        resultDiv.style.display = "none";
+        datetime.style.display = "block";
+        showingResult = false;
       }
-      mean /= (data.length / 4);
-      for (let i = 0; i < data.length; i += 4) {
-        const luminance = 0.2126 * data[i] + 0.7152 * data[i+1] + 0.0722 * data[i+2];
-        total += Math.pow(luminance - mean, 2);
-      }
-      const variance = total / (data.length / 4);
-      return Math.sqrt(variance).toFixed(2); // std deviation as contrast approximation
     }
 
-    imageInput.addEventListener('change', () => {
-      const file = imageInput.files[0];
-      if (!file) return;
-      const img = new Image();
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, img.width, img.height);
-        const data = imageData.data;
-        let r = 0, g = 0, b = 0;
-        const pixelCount = data.length / 4;
+    function runCalculation() {
+      const input = document.getElementById("content").innerText.trim().toUpperCase();
 
-        for (let i = 0; i < data.length; i += 4) {
-          r += data[i];
-          g += data[i + 1];
-          b += data[i + 2];
-        }
+      const normalizedInput = input
+        .replace(/\b(OF\s+)?CLUBS?\b|ดอกจิก|จิก|ดอก/gi, 'C')
+        .replace(/\b(OF\s+)?HEARTS?\b|หัวใจ|ใจ|หัว|โพธิ์แดง|โพธ์แดง|โพแดง/gi, 'H')
+        .replace(/\b(OF\s+)?SPADES?\b|โพดำ|โพธิ์ดำ|โพธ์ดำ/gi, 'S')
+        .replace(/\b(OF\s+)?DIAMONDS?\b|เพชร|ข้าวหลามตัด|ข้าวหลาม|หลามตัด/gi, 'D');
 
-        r = Math.round(r / pixelCount);
-        g = Math.round(g / pixelCount);
-        b = Math.round(b / pixelCount);
+      const matches = normalizedInput.match(/([2-9]|10|J|Q|K|A)\s*([SHDC])\s+(\d{1,2})/);
+      const resultDiv = document.getElementById("result");
 
-        averageColor = { r, g, b };
+      if (!matches) {
+        resultDiv.style.display = "block";
+        resultDiv.textContent = "กรุณาใส่ไพ่และตำแหน่ง เช่น QS 17";
+        resultDiv.style.color = "red";
+        document.getElementById("datetime").style.display = "none";
+        showingResult = true;
+        return;
+      }
 
-        const avgColor = `rgb(${r}, ${g}, ${b})`;
-        avgColorText.textContent = avgColor;
-        colorPreview.style.backgroundColor = avgColor;
+      const card = matches[1] + matches[2];
+      const pos = parseInt(matches[3]);
 
-        const contrast = calculateContrast(imageData);
-        contrastText.textContent = contrast;
-      };
-      img.src = URL.createObjectURL(file);
-    });
+      const topIndex = deck.indexOf(card);
+      const cutTop = (topIndex - pos + 52) % 52;
+      const cutCardTop = deck[cutTop];
 
-    copyBtn.onclick = () => {
-      const text = `${averageColor.r}, ${averageColor.g}, ${averageColor.b}`;
-      navigator.clipboard.writeText(text);
-      alert('RGB copied to clipboard!');
-    };
+      const reversedDeck = [...deck].reverse();
+      const bottomIndex = reversedDeck.indexOf(card);
+      const cutBottom = (bottomIndex - (pos - 1) + 52) % 52;
+      const cutCardBottom = reversedDeck[cutBottom];
 
-    generateLUTBtn.onclick = () => {
-      const r = (averageColor.r / 255).toFixed(4);
-      const g = (averageColor.g / 255).toFixed(4);
-      const b = (averageColor.b / 255).toFixed(4);
-      const lut = `TITLE "Simple LUT"
-LUT_3D_SIZE 2
-DOMAIN_MIN 0.0 0.0 0.0
-DOMAIN_MAX 1.0 1.0 1.0
+      resultDiv.style.display = "block";
+      resultDiv.style.color = "#ccc";
+      document.getElementById("datetime").style.display = "none";
+      showingResult = true;
 
-0.0 0.0 0.0
-${r} ${g} ${b}`;
-      lutOutput.textContent = lut;
-    };
+      resultDiv.innerHTML =
+        `⬆️ แจกจากด้านบน → ตัดที่ตำแหน่ง ${cutTop + 1} คือไพ่ ${cutCardTop}<br>` +
+        `⬇️ แจกจากด้านล่าง → ตัดที่ตำแหน่ง ${52 - cutBottom} คือไพ่ ${cutCardBottom}`;
+    }
+
+    function updateDateTime() {
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      const day = now.getDate();
+      const month = now.toLocaleString('en-GB', { month: 'long' });
+      const year = now.getFullYear();
+      document.getElementById("datetime").textContent = `${day} ${month} AD ${year} at ${hours}:${minutes}`;
+    }
+
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
   </script>
 </body>
 </html>
