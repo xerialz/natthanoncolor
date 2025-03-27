@@ -54,6 +54,142 @@
   </style>
 </head>
 <body>
-  ... (HTML content omitted for brevity, use current canvas content instead)
+  <div class="container">
+    <h1>🎨 ColorMatch Web (Mockup UI)</h1>
+
+    <div class="section">
+      <label>📥 Upload Reference Image:</label><br />
+      <input type="file" id="refInput" accept="image/*" />
+
+      <br /><label>📥 Upload Target Image:</label><br />
+      <input type="file" id="targetInput" accept="image/*" />
+    </div>
+
+    <div class="section">
+      <label for="strength">Strength</label>
+      <div class="slider-label">
+        <span>0%</span>
+        <span>100%</span>
+      </div>
+      <input type="range" id="strength" min="0" max="1" step="0.01" value="0.9" />
+    </div>
+
+    <div class="section">
+      <label>
+        <input type="checkbox" id="autoGroup" />
+        Auto Correct by Group
+      </label>
+    </div>
+
+    <div class="section">
+      <button id="applyBtn">🎬 Apply Color Match</button>
+    </div>
+
+    <div class="section images">
+      <div>
+        <strong>🖼️ Target Image</strong><br />
+        <img id="targetPreview" />
+      </div>
+      <div>
+        <strong>🎯 Reference Image</strong><br />
+        <img id="refPreview" />
+      </div>
+      <div>
+        <strong>✅ Matched Result</strong><br />
+        <canvas id="resultCanvas"></canvas>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>📊 Output Correction Values</h2>
+      <div class="output-box" id="correctionOutput">
+        Lift: R -, G -, B -<br />
+        Gamma: R -, G -, B -<br />
+        Gain: R -, G -, B -
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const refInput = document.getElementById("refInput");
+    const targetInput = document.getElementById("targetInput");
+    const refPreview = document.getElementById("refPreview");
+    const targetPreview = document.getElementById("targetPreview");
+    const canvas = document.getElementById("resultCanvas");
+    const ctx = canvas.getContext("2d");
+    const strengthSlider = document.getElementById("strength");
+    const correctionOutput = document.getElementById("correctionOutput");
+    const autoGroup = document.getElementById("autoGroup");
+
+    let refImage = null;
+    let targetImage = null;
+
+    function loadImage(file, imgElement, callback) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        imgElement.src = e.target.result;
+        const image = new Image();
+        image.onload = () => callback(image);
+        image.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    refInput.addEventListener("change", e => {
+      loadImage(e.target.files[0], refPreview, img => (refImage = img));
+    });
+
+    targetInput.addEventListener("change", e => {
+      loadImage(e.target.files[0], targetPreview, img => (targetImage = img));
+    });
+
+    function getImageData(img) {
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = img.width;
+      tempCanvas.height = img.height;
+      const tempCtx = tempCanvas.getContext("2d");
+      tempCtx.drawImage(img, 0, 0);
+      return tempCtx.getImageData(0, 0, img.width, img.height);
+    }
+
+    function matchHistogram(source, reference, strength) {
+      const matched = new Uint8ClampedArray(source.data);
+      for (let c = 0; c < 3; c++) {
+        const src = [], ref = [];
+        for (let i = 0; i < source.data.length; i += 4) {
+          src.push(source.data[i + c]);
+          ref.push(reference.data[i + c]);
+        }
+        const srcSorted = [...src].sort((a, b) => a - b);
+        const refSorted = [...ref].sort((a, b) => a - b);
+        for (let i = 0; i < src.length; i++) {
+          const val = src[i];
+          const idx = srcSorted.findIndex(v => v >= val);
+          const newVal = refSorted[Math.min(idx, refSorted.length - 1)];
+          matched[i * 4 + c] = val * (1 - strength) + newVal * strength;
+        }
+      }
+      return new ImageData(matched, source.width, source.height);
+    }
+
+    document.getElementById("applyBtn").addEventListener("click", () => {
+      if (!targetImage || (!refImage && !autoGroup.checked)) return;
+      const tData = getImageData(targetImage);
+      const rData = autoGroup.checked ? tData : getImageData(refImage);
+      const strength = parseFloat(strengthSlider.value);
+      const result = matchHistogram(tData, rData, strength);
+
+      canvas.width = result.width;
+      canvas.height = result.height;
+      ctx.putImageData(result, 0, 0);
+
+      // Fake lift/gamma/gain output (placeholder)
+      correctionOutput.innerHTML = `
+        Lift: R ${Math.random().toFixed(2)}, G ${Math.random().toFixed(2)}, B ${Math.random().toFixed(2)}<br />
+        Gamma: R ${Math.random().toFixed(2)}, G ${Math.random().toFixed(2)}, B ${Math.random().toFixed(2)}<br />
+        Gain: R ${Math.random().toFixed(2)}, G ${Math.random().toFixed(2)}, B ${Math.random().toFixed(2)}
+      `;
+    });
+  </script>
 </body>
 </html>
