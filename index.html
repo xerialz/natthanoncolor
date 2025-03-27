@@ -2,194 +2,140 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ColorMatch Web</title>
+  <title>Color Grading Helper</title>
   <style>
     body {
       font-family: sans-serif;
-      background: #1e1e1e;
-      color: #fff;
-      margin: 0;
-      padding: 2rem;
-    }
-    .container {
-      max-width: 1000px;
+      padding: 20px;
+      max-width: 600px;
       margin: auto;
     }
-    h1 {
-      margin-bottom: 1rem;
-    }
-    .section {
-      margin-bottom: 2rem;
-    }
-    input[type="file"] {
-      margin: 0.5rem 0;
-    }
-    .slider-label {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 1rem;
-    }
-    .output-box {
-      background: #2a2a2a;
-      padding: 1rem;
-      border-radius: 8px;
-      margin-top: 1rem;
+    input, button {
+      margin: 10px 0;
+      padding: 8px 12px;
+      font-size: 1rem;
     }
     canvas {
-      max-width: 100%;
-      margin-top: 1rem;
+      display: none;
     }
-    .images {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
+    #color-preview {
+      width: 100px;
+      height: 100px;
+      border: 1px solid #ccc;
+      margin-top: 10px;
     }
-    .images img {
-      width: 100%;
-      max-width: 400px;
-      border-radius: 8px;
-      border: 1px solid #444;
+    #result {
+      margin-top: 20px;
+    }
+    #lutOutput {
+      white-space: pre-wrap;
+      background: #f4f4f4;
+      padding: 10px;
+      border-radius: 6px;
+      font-family: monospace;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🎨 ColorMatch Web (Mockup UI)</h1>
+  <h1>Color Grading Helper for DaVinci Resolve</h1>
 
-    <div class="section">
-      <label>📥 Upload Reference Image:</label><br />
-      <input type="file" id="refInput" accept="image/*" />
+  <input type="file" id="imageInput" accept="image/*">
+  <canvas id="canvas"></canvas>
 
-      <br /><label>📥 Upload Target Image:</label><br />
-      <input type="file" id="targetInput" accept="image/*" />
-    </div>
-
-    <div class="section">
-      <label for="strength">Strength</label>
-      <div class="slider-label">
-        <span>0%</span>
-        <span>100%</span>
-      </div>
-      <input type="range" id="strength" min="0" max="1" step="0.01" value="0.9" />
-    </div>
-
-    <div class="section">
-      <label>
-        <input type="checkbox" id="autoGroup" />
-        Auto Correct by Group
-      </label>
-    </div>
-
-    <div class="section">
-      <button id="applyBtn">🎬 Apply Color Match</button>
-    </div>
-
-    <div class="section images">
-      <div>
-        <strong>🖼️ Target Image</strong><br />
-        <img id="targetPreview" />
-      </div>
-      <div>
-        <strong>🎯 Reference Image</strong><br />
-        <img id="refPreview" />
-      </div>
-      <div>
-        <strong>✅ Matched Result</strong><br />
-        <canvas id="resultCanvas"></canvas>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2>📊 Output Correction Values</h2>
-      <div class="output-box" id="correctionOutput">
-        Lift: R -, G -, B -<br />
-        Gamma: R -, G -, B -<br />
-        Gain: R -, G -, B -
-      </div>
-    </div>
+  <div id="result">
+    <p><strong>Average Color:</strong> <span id="avgColorText">-</span></p>
+    <div id="color-preview"></div>
+    <p><strong>Estimated Contrast:</strong> <span id="contrastText">-</span></p>
+    <button id="copyBtn">Copy RGB Values</button>
+    <button id="generateLUT">Generate LUT</button>
+    <h3>LUT Output (.cube format):</h3>
+    <div id="lutOutput">-</div>
   </div>
 
   <script>
-    const refInput = document.getElementById("refInput");
-    const targetInput = document.getElementById("targetInput");
-    const refPreview = document.getElementById("refPreview");
-    const targetPreview = document.getElementById("targetPreview");
-    const canvas = document.getElementById("resultCanvas");
-    const ctx = canvas.getContext("2d");
-    const strengthSlider = document.getElementById("strength");
-    const correctionOutput = document.getElementById("correctionOutput");
-    const autoGroup = document.getElementById("autoGroup");
+    const imageInput = document.getElementById('imageInput');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const avgColorText = document.getElementById('avgColorText');
+    const contrastText = document.getElementById('contrastText');
+    const colorPreview = document.getElementById('color-preview');
+    const copyBtn = document.getElementById('copyBtn');
+    const generateLUTBtn = document.getElementById('generateLUT');
+    const lutOutput = document.getElementById('lutOutput');
 
-    let refImage = null;
-    let targetImage = null;
+    let averageColor = { r: 0, g: 0, b: 0 };
 
-    function loadImage(file, imgElement, callback) {
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        imgElement.src = e.target.result;
-        const image = new Image();
-        image.onload = () => callback(image);
-        image.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-
-    refInput.addEventListener("change", e => {
-      loadImage(e.target.files[0], refPreview, img => (refImage = img));
-    });
-
-    targetInput.addEventListener("change", e => {
-      loadImage(e.target.files[0], targetPreview, img => (targetImage = img));
-    });
-
-    function getImageData(img) {
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = img.width;
-      tempCanvas.height = img.height;
-      const tempCtx = tempCanvas.getContext("2d");
-      tempCtx.drawImage(img, 0, 0);
-      return tempCtx.getImageData(0, 0, img.width, img.height);
-    }
-
-    function matchHistogram(source, reference, strength) {
-      const matched = new Uint8ClampedArray(source.data);
-      for (let c = 0; c < 3; c++) {
-        const src = [], ref = [];
-        for (let i = 0; i < source.data.length; i += 4) {
-          src.push(source.data[i + c]);
-          ref.push(reference.data[i + c]);
-        }
-        const srcSorted = [...src].sort((a, b) => a - b);
-        const refSorted = [...ref].sort((a, b) => a - b);
-        for (let i = 0; i < src.length; i++) {
-          const val = src[i];
-          const idx = srcSorted.findIndex(v => v >= val);
-          const newVal = refSorted[Math.min(idx, refSorted.length - 1)];
-          matched[i * 4 + c] = val * (1 - strength) + newVal * strength;
-        }
+    function calculateContrast(imageData) {
+      const data = imageData.data;
+      let total = 0;
+      let mean = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const luminance = 0.2126 * data[i] + 0.7152 * data[i+1] + 0.0722 * data[i+2];
+        mean += luminance;
       }
-      return new ImageData(matched, source.width, source.height);
+      mean /= (data.length / 4);
+      for (let i = 0; i < data.length; i += 4) {
+        const luminance = 0.2126 * data[i] + 0.7152 * data[i+1] + 0.0722 * data[i+2];
+        total += Math.pow(luminance - mean, 2);
+      }
+      const variance = total / (data.length / 4);
+      return Math.sqrt(variance).toFixed(2); // std deviation as contrast approximation
     }
 
-    document.getElementById("applyBtn").addEventListener("click", () => {
-      if (!targetImage || (!refImage && !autoGroup.checked)) return;
-      const tData = getImageData(targetImage);
-      const rData = autoGroup.checked ? tData : getImageData(refImage);
-      const strength = parseFloat(strengthSlider.value);
-      const result = matchHistogram(tData, rData, strength);
+    imageInput.addEventListener('change', () => {
+      const file = imageInput.files[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        const data = imageData.data;
+        let r = 0, g = 0, b = 0;
+        const pixelCount = data.length / 4;
 
-      canvas.width = result.width;
-      canvas.height = result.height;
-      ctx.putImageData(result, 0, 0);
+        for (let i = 0; i < data.length; i += 4) {
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+        }
 
-      // Fake lift/gamma/gain output (placeholder)
-      correctionOutput.innerHTML = `
-        Lift: R ${Math.random().toFixed(2)}, G ${Math.random().toFixed(2)}, B ${Math.random().toFixed(2)}<br />
-        Gamma: R ${Math.random().toFixed(2)}, G ${Math.random().toFixed(2)}, B ${Math.random().toFixed(2)}<br />
-        Gain: R ${Math.random().toFixed(2)}, G ${Math.random().toFixed(2)}, B ${Math.random().toFixed(2)}
-      `;
+        r = Math.round(r / pixelCount);
+        g = Math.round(g / pixelCount);
+        b = Math.round(b / pixelCount);
+
+        averageColor = { r, g, b };
+
+        const avgColor = `rgb(${r}, ${g}, ${b})`;
+        avgColorText.textContent = avgColor;
+        colorPreview.style.backgroundColor = avgColor;
+
+        const contrast = calculateContrast(imageData);
+        contrastText.textContent = contrast;
+      };
+      img.src = URL.createObjectURL(file);
     });
+
+    copyBtn.onclick = () => {
+      const text = `${averageColor.r}, ${averageColor.g}, ${averageColor.b}`;
+      navigator.clipboard.writeText(text);
+      alert('RGB copied to clipboard!');
+    };
+
+    generateLUTBtn.onclick = () => {
+      const r = (averageColor.r / 255).toFixed(4);
+      const g = (averageColor.g / 255).toFixed(4);
+      const b = (averageColor.b / 255).toFixed(4);
+      const lut = `TITLE "Simple LUT"
+LUT_3D_SIZE 2
+DOMAIN_MIN 0.0 0.0 0.0
+DOMAIN_MAX 1.0 1.0 1.0
+
+0.0 0.0 0.0
+${r} ${g} ${b}`;
+      lutOutput.textContent = lut;
+    };
   </script>
 </body>
 </html>
