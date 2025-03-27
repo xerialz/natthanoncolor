@@ -1,176 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link rel="apple-touch-icon" href="icon.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ACAAN">
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>ACAAN Notes UI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Color Match & Film Look</title>
   <style>
-    html, body {
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial;
       margin: 0;
       padding: 0;
-      width: 100vw;
-      height: 100vh;
-      background-color: black;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
+      background: #f9f9f9;
+      color: #111;
     }
-    body {
-      background: url('https://i.imgur.com/qSouMXH.jpeg') no-repeat center center fixed;
-      background-size: cover;
-      position: relative;
-    }
-    #datetime {
-      position: absolute;
-      top: 42px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 16px;
-      color: #888;
-      z-index: 2;
-      font-weight: 400;
+    header {
+      padding: 1rem;
+      background: #fff;
+      font-size: 1.5rem;
+      font-weight: bold;
       text-align: center;
+      border-bottom: 1px solid #ddd;
     }
-    #content {
-      position: absolute;
-      top: 80px;
-      left: 20px;
-      right: 20px;
-      bottom: 80px;
-      color: white;
-      font-size: 20px;
-      outline: none;
-      white-space: pre-wrap;
-      overflow-y: auto;
-      z-index: 1;
-      -webkit-overflow-scrolling: touch;
-      caret-color: #ffcc00;
+    .container {
+      padding: 1rem;
+      display: grid;
+      gap: 1rem;
     }
-    #content:focus {
-      color: white;
+    .card {
+      background: #fff;
+      border-radius: 1rem;
+      padding: 1rem;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     }
-    #result {
-      position: absolute;
-      top: 42px;
-      left: 50%;
-      transform: translateX(-50%);
-      text-align: center;
-      color: #ccc;
-      font-size: 16px;
-      display: none;
-      z-index: 3;
-      font-weight: 400;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    label {
+      font-weight: 600;
     }
-    #calculateBtn {
-      position: absolute;
-      bottom: 20px;
-      left: 20px;
-      width: 44px;
-      height: 44px;
-      z-index: 10;
-      background-color: transparent;
-      border: none;
+    input[type="file"] {
+      margin-top: 0.5rem;
+    }
+    select, input[type="range"] {
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+    canvas {
+      max-width: 100%;
+      border-radius: 0.5rem;
+    }
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
     }
   </style>
 </head>
 <body>
-  <div id="datetime"></div>
-  <div id="content" contenteditable="true"></div>
-  <div id="result"></div>
-  <div id="calculateBtn"
-    onmousedown="toggleResult(true)" 
-    onmouseup="toggleResult(false)" 
-    ontouchstart="toggleResult(true)" 
-    ontouchend="toggleResult(false)"></div>
+  <header>Color Match & Film Look Helper</header>
+  <div class="container">
+    <div class="card">
+      <label>Upload Reference Image</label>
+      <input type="file" accept="image/*" id="refImage">
+    </div>
+    <div class="card">
+      <label>Upload Target Image</label>
+      <input type="file" accept="image/*" id="targetImage">
+    </div>
+    <div class="card">
+      <label>Input Color Space</label>
+      <select id="inputColorSpace">
+        <option>ACEScct</option>
+        <option>ACEScc</option>
+        <option>ACEScg</option>
+        <option>Davinci Wide Gamut</option>
+        <option>sRGB</option>
+      </select>
+    </div>
+    <div class="card">
+      <label>Output Color Space</label>
+      <select id="outputColorSpace">
+        <option>ACEScct</option>
+        <option>ACEScc</option>
+        <option>ACEScg</option>
+        <option>Davinci Wide Gamut</option>
+        <option>sRGB</option>
+      </select>
+    </div>
+    <div class="card">
+      <label>Film Look</label>
+      <select id="filmLook">
+        <option value="none">None</option>
+        <option value="kodak250d">Kodak 250D</option>
+        <option value="kodak500t">Kodak 500T</option>
+        <option value="kodak2383">Kodak 2383 Print</option>
+        <option value="company3">Hollywood (Company 3)</option>
+        <option value="kpop">K-Pop MV</option>
+      </select>
+      <div class="slider-label">
+        <span>Color Strength</span><span id="colorStrengthVal">1.0</span>
+      </div>
+      <input type="range" min="0" max="2" step="0.01" value="1" id="colorStrength">
+
+      <div class="slider-label">
+        <span>Contrast Strength</span><span id="contrastStrengthVal">1.0</span>
+      </div>
+      <input type="range" min="0" max="2" step="0.01" value="1" id="contrastStrength">
+    </div>
+    <div class="card">
+      <canvas id="previewCanvas" width="640" height="360"></canvas>
+    </div>
+    <div class="card">
+      <button onclick="exportLUT()">Export LUT (.cube)</button>
+    </div>
+  </div>
 
   <script>
-    let deck = [
-      "QC", "2H", "QD", "QH", "2C", "5H", "AC", "AH", "9C", "6C",
-      "6H", "KH", "8H", "JD", "7C", "9H", "3S", "7D", "8C", "5D",
-      "KC", "3H", "10C", "AD", "AS", "3C", "JC", "4D", "JS", "4S",
-      "8D", "4H", "7S", "4C", "6S", "10D", "3D", "KS", "6D", "7H",
-      "9S", "9D", "10S", "5C", "KD", "10H", "5S", "8S", "JH", "2S",
-      "2D", "QS"
-    ];
+    // Placeholder script functionality
+    document.getElementById("colorStrength").addEventListener("input", function(e) {
+      document.getElementById("colorStrengthVal").innerText = e.target.value;
+    });
+    document.getElementById("contrastStrength").addEventListener("input", function(e) {
+      document.getElementById("contrastStrengthVal").innerText = e.target.value;
+    });
 
-    let showingResult = false;
-
-    function toggleResult(show) {
-      const resultDiv = document.getElementById("result");
-      const datetime = document.getElementById("datetime");
-
-      if (show) {
-        runCalculation();
-      } else {
-        resultDiv.style.display = "none";
-        datetime.style.display = "block";
-        showingResult = false;
-      }
+    function exportLUT() {
+      alert("This feature is coming soon! Will export LUT with current color/contrast/film look settings.");
     }
-
-    function runCalculation() {
-      const input = document.getElementById("content").innerText.trim().toUpperCase();
-
-      const normalizedInput = input
-        .replace(/\b(OF\s+)?CLUBS?\b|ดอกจิก|จิก|ดอก/gi, 'C')
-        .replace(/\b(OF\s+)?HEARTS?\b|หัวใจ|ใจ|หัว|โพธิ์แดง|โพธ์แดง|โพแดง/gi, 'H')
-        .replace(/\b(OF\s+)?SPADES?\b|โพดำ|โพธิ์ดำ|โพธ์ดำ/gi, 'S')
-        .replace(/\b(OF\s+)?DIAMONDS?\b|เพชร|ข้าวหลามตัด|ข้าวหลาม|หลามตัด/gi, 'D');
-
-      const matches = normalizedInput.match(/([2-9]|10|J|Q|K|A)\s*([SHDC])\s+(\d{1,2})/);
-      const resultDiv = document.getElementById("result");
-
-      if (!matches) {
-        resultDiv.style.display = "block";
-        resultDiv.textContent = "กรุณาใส่ไพ่และตำแหน่ง เช่น QS 17";
-        resultDiv.style.color = "red";
-        document.getElementById("datetime").style.display = "none";
-        showingResult = true;
-        return;
-      }
-
-      const card = matches[1] + matches[2];
-      const pos = parseInt(matches[3]);
-
-      const topIndex = deck.indexOf(card);
-      const cutTop = (topIndex - pos + 52) % 52;
-      const cutCardTop = deck[cutTop];
-
-      const reversedDeck = [...deck].reverse();
-      const bottomIndex = reversedDeck.indexOf(card);
-      const cutBottom = (bottomIndex - (pos - 1) + 52) % 52;
-      const cutCardBottom = reversedDeck[cutBottom];
-
-      resultDiv.style.display = "block";
-      resultDiv.style.color = "#ccc";
-      document.getElementById("datetime").style.display = "none";
-      showingResult = true;
-
-      resultDiv.innerHTML =
-        `⬆️ แจกจากด้านบน → ตัดที่ตำแหน่ง ${cutTop + 1} คือไพ่ ${cutCardTop}<br>` +
-        `⬇️ แจกจากด้านล่าง → ตัดที่ตำแหน่ง ${52 - cutBottom} คือไพ่ ${cutCardBottom}`;
-    }
-
-    function updateDateTime() {
-      const now = new Date();
-      const hours = now.getHours().toString().padStart(2, '0');
-      const minutes = now.getMinutes().toString().padStart(2, '0');
-      const day = now.getDate();
-      const month = now.toLocaleString('en-GB', { month: 'long' });
-      const year = now.getFullYear();
-      document.getElementById("datetime").textContent = `${day} ${month} AD ${year} at ${hours}:${minutes}`;
-    }
-
-    updateDateTime();
-    setInterval(updateDateTime, 1000);
   </script>
 </body>
 </html>
